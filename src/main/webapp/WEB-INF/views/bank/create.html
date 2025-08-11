@@ -1,0 +1,21 @@
+<html lang="en"  xmlns:th="http://thymeleaf.org">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+</head>
+<body>
+
+<form  th:method="POST" th:action="@{/createcard/save}">
+    <input type="text" name="name" id="name" placeholder="Name">
+    <br/>
+    <input type="text" name="surname" id="surname" placeholder="Surname">
+    <br/>
+    <button type="submit">Create</button>
+
+
+
+</form>
+
+</body>
+</html>
