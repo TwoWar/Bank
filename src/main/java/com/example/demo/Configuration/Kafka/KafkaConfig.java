@@ -16,6 +16,8 @@ import org.springframework.kafka.core.*;
 import org.springframework.kafka.support.serializer.ErrorHandlingDeserializer;
 import org.springframework.kafka.support.serializer.JsonDeserializer;
 import org.springframework.kafka.support.serializer.JsonSerializer;
+import org.springframework.kafka.transaction.KafkaTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -44,6 +46,9 @@ public class KafkaConfig {
 
     @Value("${" + ACKS_CONFIG + ":all}")
     private String acks;
+
+    @Value("${spring.kafka.producer.transaction-id-prefix}")
+    private String transactionIdPrefix;
 
     @Bean
     ConsumerFactory<String, Object> consumerFactory() {
@@ -77,6 +82,8 @@ public class KafkaConfig {
         configProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, valueSerializer);
         configProps.put(ProducerConfig.ACKS_CONFIG, acks);
         configProps.put(JsonSerializer.ADD_TYPE_INFO_HEADERS, false);
+
+        configProps.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionIdPrefix);
         return new DefaultKafkaProducerFactory<>(configProps);
     }
 
@@ -92,6 +99,18 @@ public class KafkaConfig {
                 .replicas(1)
                 .configs(Map.of("min.insync.replicas", "2"))
                 .build();
+    }
+
+    @Bean(name = "kafkaTransactionManager")
+    public KafkaTransactionManager<String, Object> kafkaTransactionManager(ProducerFactory<String, Object> producerFactory) {
+        KafkaTransactionManager<String, Object> transactionManager = new KafkaTransactionManager<>(producerFactory);
+        return transactionManager;
+    }
+
+    @Bean
+    public TransactionTemplate transactionTemplate(KafkaTransactionManager<String, Object> transactionManager) {
+        TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
+        return transactionTemplate;
     }
 
 
