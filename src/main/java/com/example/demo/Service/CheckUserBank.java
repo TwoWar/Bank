@@ -13,7 +13,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.transaction.annotation.Transactional;
 import java.sql.Timestamp;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -26,24 +26,24 @@ public class CheckUserBank {
 
     private final KafkaTemplate<String, Object> kafkaTemplate;
 
-    private final TransactionTemplate transactionTemplate;
+
 
 
 
     private static final Logger logger = LoggerFactory.getLogger(CheckUserBank.class);
 
-    @Autowired
-    public CheckUserBank(CardRepository cardRepository, KafkaTemplate<String, Object> kafkaTemplate, TransactionTemplate transactionTemplate) {
+
+    public CheckUserBank(CardRepository cardRepository, KafkaTemplate<String, Object> kafkaTemplate) {
         this.cardRepository = cardRepository;
         this.kafkaTemplate = kafkaTemplate;
-        this.transactionTemplate = transactionTemplate;
+
     }
 
 
-   // @Transactional("transactionManager")
+@Transactional
     public void debitingMoney(String cvv, String number, String name, int amount, SuccessDebitingFundsTopicDTO successDebitingFundsTopicDTO, Timestamp timestamp) {
 
-        transactionTemplate.execute(status -> {
+
             System.out.println("debiting money");
             System.out.println("вызов0");
             try {
@@ -66,20 +66,18 @@ public class CheckUserBank {
                     sendMessageDebitingMoney(successDebitingFundsTopicDTO);
 
                     System.out.println("вызов3");
-
-                    return null;
                 } else {
                     logger.error("Карта с номером: {} , name: {} , cvv: {} не найдена ", number, name, cvv);
                     throw new RuntimeException("Карта с введенными вами данными не найдена");
                 }
 
             } catch (Exception e) {
-                status.setRollbackOnly();
+
                 System.out.println("Не удалось найти пользователя " + e.getMessage());
                 throw new RuntimeException("Не удалось найти пользователя " + e.getMessage());
             }
 
-        });
+
 
     }
 
