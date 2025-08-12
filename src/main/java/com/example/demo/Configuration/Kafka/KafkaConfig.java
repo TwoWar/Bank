@@ -104,9 +104,15 @@ public class KafkaConfig {
     }
 
 
-    @Bean
+    @Bean(name = "kafkaTransactionManager")
     public KafkaTransactionManager<String, Object> kafkaTransactionManager(ProducerFactory<String, Object> producerFactory) {
-        return new KafkaTransactionManager<>(producerFactory);
+        KafkaTransactionManager<String, Object> transactionManager = new KafkaTransactionManager<>(producerFactory);
+        return transactionManager;
+    }
+    @Bean
+    public TransactionTemplate transactionTemplate(KafkaTransactionManager<String, Object> transactionManager) {
+        TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
+        return transactionTemplate;
     }
 
 
