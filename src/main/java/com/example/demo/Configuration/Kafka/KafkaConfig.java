@@ -104,7 +104,7 @@ public class KafkaConfig {
     }
 
 
-    @Bean(name = "kafkaTransactionManager")
+    @Bean
     public KafkaTransactionManager<String, Object> kafkaTransactionManager(ProducerFactory<String, Object> producerFactory) {
         return new KafkaTransactionManager<>(producerFactory);
     }

@@ -9,18 +9,11 @@ import com.google.common.util.concurrent.ListenableFuture;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.BeanFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
-import org.springframework.kafka.transaction.KafkaTransactionManager;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.TransactionStatus;
-
-
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
-
 import java.sql.Timestamp;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -28,23 +21,28 @@ import java.util.concurrent.CompletableFuture;
 @Service
 public class CheckUserBank {
 
-    @Autowired
-    private CardRepository cardRepository;
 
-    @Autowired
-    private KafkaTemplate<String, Object> kafkaTemplate;
+    private final CardRepository cardRepository;
+
+    private final KafkaTemplate<String, Object> kafkaTemplate;
+
+    private final TransactionTemplate transactionTemplate;
 
 
-
-    @Autowired
-    private BeanFactory beanFactory;
 
     private static final Logger logger = LoggerFactory.getLogger(CheckUserBank.class);
+
+    @Autowired
+    public CheckUserBank(CardRepository cardRepository, KafkaTemplate<String, Object> kafkaTemplate, TransactionTemplate transactionTemplate) {
+        this.cardRepository = cardRepository;
+        this.kafkaTemplate = kafkaTemplate;
+        this.transactionTemplate = transactionTemplate;
+    }
 
 
    // @Transactional("transactionManager")
     public void debitingMoney(String cvv, String number, String name, int amount, SuccessDebitingFundsTopicDTO successDebitingFundsTopicDTO, Timestamp timestamp) {
-        TransactionTemplate transactionTemplate = new TransactionTemplate(beanFactory.getBean("kafkaTransactionManager", KafkaTransactionManager.class));
+
         transactionTemplate.execute(status -> {
             System.out.println("debiting money");
             System.out.println("вызов0");
