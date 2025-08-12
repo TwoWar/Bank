@@ -2,12 +2,14 @@ package com.example.demo.Service;
 
 import com.example.demo.DTO.SuccessDebitingFundsTopicDTO;
 import com.example.demo.models.Operation;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
 @Service
 public class RedisService {
 
+    @Autowired
     private RedisTemplate<String, Object> redisTemplate;
 
 

@@ -18,7 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.TransactionStatus;
 
 
-
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.sql.Timestamp;
@@ -34,8 +34,7 @@ public class CheckUserBank {
     @Autowired
     private KafkaTemplate<String, Object> kafkaTemplate;
 
-    @Autowired
-    private TransactionTemplate transactionTemplate;
+
 
     @Autowired
     private BeanFactory beanFactory;
@@ -43,9 +42,9 @@ public class CheckUserBank {
     private static final Logger logger = LoggerFactory.getLogger(CheckUserBank.class);
 
 
+    @Transactional("transactionManager")
     public void debitingMoney(String cvv, String number, String name, int amount, SuccessDebitingFundsTopicDTO successDebitingFundsTopicDTO, Timestamp timestamp) {
-        TransactionTemplate transactionTemplate = new TransactionTemplate(beanFactory.getBean("kafkaTransactionManager", KafkaTransactionManager.class));
-        transactionTemplate.execute(status -> {
+
         System.out.println("debiting money");
             System.out.println("вызов0");
         try {
@@ -63,10 +62,12 @@ public class CheckUserBank {
                 operation.setDate(new Timestamp(timestamp.getTime()));
 
                 System.out.println("вызов2");
-                sendWithOperationKafka(operation,status);
+                sendWithOperationKafka(operation);
+
+                sendMessageDebitingMoney(successDebitingFundsTopicDTO);
 
                 System.out.println("вызов3");
-                return null;
+
 
             } else {
                 logger.error("Карта с номером: {} , name: {} , cvv: {} не найдена ", number, name, cvv);
@@ -74,36 +75,59 @@ public class CheckUserBank {
             }
 
         } catch (Exception e) {
-            status.setRollbackOnly(); // Откат транзакции
+
             System.out.println("Не удалось найти пользователя " + e.getMessage());
             throw new RuntimeException("Не удалось найти пользователя " + e.getMessage());
         }
-    });
+
 
     }
 
 
 
-    private void sendWithOperationKafka(Operation operation, TransactionStatus status) {
-        System.out.println("sendWithOperationKafka");
-        ProducerRecord<String, Object> record = new ProducerRecord<>(
-                "queue-for-transfer-operation-topic",
-                String.valueOf(operation.getIdOperation()),
-                operation
-        );
+    private void sendWithOperationKafka(Operation operation) {
+        try {
+            String messageType = operation.getClass().getSimpleName();
+            System.out.println("sendWithOperationKafka");
+            ProducerRecord<String, Object> record = new ProducerRecord<>(
+                    "queue-for-transfer-operation-topic",
+                    String.valueOf(operation.getIdOperation()),
+                    operation
+            );
+            record.headers().add("messageType", messageType.getBytes());
 
-        CompletableFuture<SendResult<String, Object>> future = kafkaTemplate.send(record);
+            CompletableFuture<SendResult<String, Object>> future = kafkaTemplate.send(record);
+        }catch (Exception e) {
+            throw new RuntimeException("Ошибка при отправке операции в kafka " + e.getMessage());
+        }
 
-        future.thenAccept(result -> {
-                    System.out.println("Сообщение успешно отправлено в Kafka: " + operation.getIdOperation() +
-                            ", offset=" + result.getRecordMetadata().offset());
-                })
-                .exceptionally(ex -> {
-                    System.err.println("Ошибка при отправке сообщения в Kafka: " + operation.getIdOperation() +
-                            ", error=" + ex.getMessage());
-                    status.setRollbackOnly(); // Откат транзакции
-                    throw new RuntimeException("Ошибка при отправке сообщения в Kafka", ex);
-                });
+    }
+
+    private boolean sendMessageDebitingMoney(SuccessDebitingFundsTopicDTO successDebitingFundsTopicDTO) {
+
+        try {
+            String messageType = successDebitingFundsTopicDTO.getClass().getSimpleName();
+
+            System.out.println(messageType + " TYPE");
+            ProducerRecord<String, Object> debiting = new ProducerRecord<>(
+                    "success-debiting-funds-topic",
+                    String.valueOf(successDebitingFundsTopicDTO.getIdOperation()),
+                    successDebitingFundsTopicDTO
+            );
+            debiting.headers().add("messageType", messageType.getBytes());
+
+            SendResult<String, Object> future = kafkaTemplate.send(debiting).get();
+
+            System.out.println("Topic: " + future.getRecordMetadata().topic());
+            System.out.println("Partition: " + future.getRecordMetadata().partition());
+            System.out.println("Offset: " + future.getRecordMetadata().offset());
+            System.out.println("Timestamp: " + future.getRecordMetadata().timestamp());
+            System.out.println("PaymentId " + successDebitingFundsTopicDTO.getId());
+
+            return true;
+        }catch (Exception e){
+            throw new RuntimeException(e);
+        }
     }
 
 

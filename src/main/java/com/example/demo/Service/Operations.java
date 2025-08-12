@@ -69,7 +69,7 @@ public class Operations implements OperationFromApi{
             System.out.println("Debiting Money success");
 
 
-            sendMessageDebitingMoney(successDebitingFundsTopicDTO);
+            //sendMessageDebitingMoney(successDebitingFundsTopicDTO);
 
             System.out.println("Успех operationDebitingMoneyAndSendMessage");
 
