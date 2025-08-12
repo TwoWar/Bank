@@ -42,44 +42,46 @@ public class CheckUserBank {
     private static final Logger logger = LoggerFactory.getLogger(CheckUserBank.class);
 
 
-    @Transactional("transactionManager")
+   // @Transactional("transactionManager")
     public void debitingMoney(String cvv, String number, String name, int amount, SuccessDebitingFundsTopicDTO successDebitingFundsTopicDTO, Timestamp timestamp) {
-
-        System.out.println("debiting money");
+        TransactionTemplate transactionTemplate = new TransactionTemplate(beanFactory.getBean("kafkaTransactionManager", KafkaTransactionManager.class));
+        transactionTemplate.execute(status -> {
+            System.out.println("debiting money");
             System.out.println("вызов0");
-        try {
-            Optional<Card> checkCard = cardRepository.findCardByCvvAndNumberAndName(cvv, number, name);
+            try {
+                Optional<Card> checkCard = cardRepository.findCardByCvvAndNumberAndName(cvv, number, name);
 
-            if (checkCard.isPresent()) {
-                Card card = checkCard.get(); //Важно создать именно новый объект на основе ответа от бд
-                System.out.println("вызов1");
-                if (checkCard.get().getMoney() >= amount) {
-                    card.setMoney(checkCard.get().getMoney() - amount);
-                    cardRepository.save(card);
+                if (checkCard.isPresent()) {
+                    Card card = checkCard.get(); //Важно создать именно новый объект на основе ответа от бд
+                    System.out.println("вызов1");
+                    if (checkCard.get().getMoney() >= amount) {
+                        card.setMoney(checkCard.get().getMoney() - amount);
+                        cardRepository.save(card);
+                    }
+
+                    Operation operation = new Operation(successDebitingFundsTopicDTO);
+                    operation.setDate(new Timestamp(timestamp.getTime()));
+
+                    System.out.println("вызов2");
+                    sendWithOperationKafka(operation);
+
+                    sendMessageDebitingMoney(successDebitingFundsTopicDTO);
+
+                    System.out.println("вызов3");
+
+                    return null;
+                } else {
+                    logger.error("Карта с номером: {} , name: {} , cvv: {} не найдена ", number, name, cvv);
+                    throw new RuntimeException("Карта с введенными вами данными не найдена");
                 }
 
-                Operation operation = new Operation(successDebitingFundsTopicDTO);
-                operation.setDate(new Timestamp(timestamp.getTime()));
-
-                System.out.println("вызов2");
-                sendWithOperationKafka(operation);
-
-                sendMessageDebitingMoney(successDebitingFundsTopicDTO);
-
-                System.out.println("вызов3");
-
-
-            } else {
-                logger.error("Карта с номером: {} , name: {} , cvv: {} не найдена ", number, name, cvv);
-                throw new RuntimeException("Карта с введенными вами данными не найдена");
+            } catch (Exception e) {
+                status.setRollbackOnly();
+                System.out.println("Не удалось найти пользователя " + e.getMessage());
+                throw new RuntimeException("Не удалось найти пользователя " + e.getMessage());
             }
 
-        } catch (Exception e) {
-
-            System.out.println("Не удалось найти пользователя " + e.getMessage());
-            throw new RuntimeException("Не удалось найти пользователя " + e.getMessage());
-        }
-
+        });
 
     }
 
