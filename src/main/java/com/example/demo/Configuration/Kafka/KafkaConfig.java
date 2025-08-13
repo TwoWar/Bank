@@ -2,14 +2,19 @@ package com.example.demo.Configuration.Kafka;
 
 
 import com.fasterxml.jackson.databind.ser.std.StringSerializer;
+import jakarta.persistence.EntityManagerFactory;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
+import org.springframework.boot.autoconfigure.batch.BatchAutoConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 import org.springframework.core.env.Environment;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.config.TopicBuilder;
@@ -18,6 +23,7 @@ import org.springframework.kafka.support.serializer.ErrorHandlingDeserializer;
 import org.springframework.kafka.support.serializer.JsonDeserializer;
 import org.springframework.kafka.support.serializer.JsonSerializer;
 import org.springframework.kafka.transaction.KafkaTransactionManager;
+import org.springframework.orm.jpa.JpaTransactionManager;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -28,6 +34,7 @@ import static org.apache.kafka.clients.producer.ProducerConfig.ACKS_CONFIG;
 
 @Configuration
 @EnableTransactionManagement
+@EnableAutoConfiguration(exclude = BatchAutoConfiguration.class)
 public class KafkaConfig {
 
     @Autowired
@@ -104,13 +111,25 @@ public class KafkaConfig {
     }
 
 
-    @Bean(name = "transactionManager")
+    @Bean(name = "kafkaTransactionManager")
     public KafkaTransactionManager<String, Object> kafkaTransactionManager(ProducerFactory<String, Object> producerFactory) {
         KafkaTransactionManager<String, Object> transactionManager = new KafkaTransactionManager<>(producerFactory);
         return transactionManager;
     }
+
+    @Bean(name = "jpaTransactionManager")
+    public JpaTransactionManager jpaTransactionManager(EntityManagerFactory emf) {
+        return new JpaTransactionManager(emf);
+    }
+
     @Bean
-    public TransactionTemplate transactionTemplate(KafkaTransactionManager<String, Object> transactionManager) {
+    public TransactionTemplate kafkaTransactionTemplate(@Qualifier("kafkaTransactionManager") KafkaTransactionManager<String, Object> transactionManager) {
+        TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
+        return transactionTemplate;
+    }
+
+    @Bean
+    public TransactionTemplate jpaTransactionTemplate(@Qualifier("jpaTransactionManager") JpaTransactionManager transactionManager) {
         TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
         return transactionTemplate;
     }
