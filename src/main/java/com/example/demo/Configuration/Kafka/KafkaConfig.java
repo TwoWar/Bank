@@ -111,7 +111,7 @@ public class KafkaConfig {
     }
 
 
-    @Bean(name = "kafkaTransactionManager")
+    @Bean(name = "customKafkaTransactionManager")
     public KafkaTransactionManager<String, Object> kafkaTransactionManager(ProducerFactory<String, Object> producerFactory) {
         KafkaTransactionManager<String, Object> transactionManager = new KafkaTransactionManager<>(producerFactory);
         return transactionManager;
@@ -122,8 +122,8 @@ public class KafkaConfig {
         return new JpaTransactionManager(emf);
     }
 
-    @Bean
-    public TransactionTemplate kafkaTransactionTemplate(@Qualifier("kafkaTransactionManager") KafkaTransactionManager<String, Object> transactionManager) {
+    @Bean("customKafkaTransactionTemplate")
+    public TransactionTemplate kafkaTransactionTemplate(@Qualifier("customKafkaTransactionManager") KafkaTransactionManager<String, Object> transactionManager) {
         TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
         return transactionTemplate;
     }

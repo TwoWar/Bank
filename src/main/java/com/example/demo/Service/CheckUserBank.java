@@ -38,7 +38,7 @@ public class CheckUserBank {
     private static final Logger logger = LoggerFactory.getLogger(CheckUserBank.class);
 
     @Autowired
-    public CheckUserBank(CardRepository cardRepository, KafkaTemplate<String, Object> kafkaTemplate, @Qualifier("kafkaTransactionTemplate") TransactionTemplate kafkaTransactionTemplate) {
+    public CheckUserBank(CardRepository cardRepository, KafkaTemplate<String, Object> kafkaTemplate, @Qualifier("customKafkaTransactionTemplate") TransactionTemplate kafkaTransactionTemplate) {
         this.cardRepository = cardRepository;
         this.kafkaTemplate = kafkaTemplate;
         this.kafkaTransactionTemplate = kafkaTransactionTemplate;
