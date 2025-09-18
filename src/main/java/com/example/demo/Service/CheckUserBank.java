@@ -1,47 +1,158 @@
 package com.example.demo.Service;
 
 
+import com.example.demo.DTO.SuccessDebitingFundsTopicDTO;
 import com.example.demo.Dao.CardRepository;
 import com.example.demo.models.Card;
+import com.example.demo.models.Operation;
+import com.google.common.util.concurrent.ListenableFuture;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.context.annotation.Lazy;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.support.SendResult;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
+import java.sql.Timestamp;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 
 @Service
 public class CheckUserBank {
 
+
+    private final CardRepository cardRepository;
+
+    private final KafkaTemplate<String, Object> kafkaTemplate;
+
     @Autowired
-    private CardRepository cardRepository;
+    @Qualifier("jpaTransactionTemplate")
+    private TransactionTemplate jpaTransactionTemplate;
+
+    @PersistenceContext
+    private EntityManager entityManager;
+
+
 
     private static final Logger logger = LoggerFactory.getLogger(CheckUserBank.class);
 
+    //@Qualifier("customKafkaTransactionTemplate") TransactionTemplate kafkaTransactionTemplate
+    @Autowired
+    public CheckUserBank(CardRepository cardRepository, KafkaTemplate<String, Object> kafkaTemplate) {
+        this.cardRepository = cardRepository;
+        this.kafkaTemplate = kafkaTemplate;
+    }
 
 
-    public void debitingMoney(String cvv, String number, String name, int amount) {
+    public void debitingMoney(String cvv, String number, String name, int amount, SuccessDebitingFundsTopicDTO successDebitingFundsTopicDTO, Timestamp timestamp) {
+    jpaTransactionTemplate.execute(status -> {
         System.out.println("debiting money");
-                try {
-                    Optional<Card> checkCard = cardRepository.findCardByCvvAndNumberAndName(cvv, number, name);
+        System.out.println("вызов0");
+        try {
 
-                    if (checkCard.isPresent()) {
-                        Card card = checkCard.get(); //Важно создать именно новый объект на основе ответа от бд
+            Optional<Card> checkCard = cardRepository.findCardByCvvAndNumberAndName(cvv, number, name);
 
-                        if (checkCard.get().getMoney() >= amount){
-                            card.setMoney(checkCard.get().getMoney() - amount);
-                            cardRepository.save(card);
-                        }
-                    }else {
-                        logger.error("Карта с номером: {} , name: {} , cvv: {} не найдена " , number, name, cvv);
-                        throw new RuntimeException("Карта с введенными вами данными не найдена");
-                    }
-
-                }catch (Exception e){
-                    System.out.println("Не удалось найти пользователя " + e.getMessage());
-                    throw new RuntimeException("Не удалось найти пользователя " + e.getMessage());
+            if (checkCard.isPresent()) {
+                Card card = checkCard.get(); //Важно создать именно новый объект на основе ответа от бд
+                System.out.println("вызов1");
+                if (checkCard.get().getMoney() >= amount) {
+                    card.setMoney(checkCard.get().getMoney() - amount);
+                    entityManager.merge(card);
                 }
+
+                Operation operation = new Operation(successDebitingFundsTopicDTO);
+                operation.setDate(new Timestamp(timestamp.getTime()));
+
+                System.out.println("вызов2");
+                TransactionSynchronizationManager.registerSynchronization(
+                        new TransactionSynchronization() {
+                            @Override
+                            public void afterCommit() { //если транзакция успешна
+                                System.out.println("OPERATION " + operation);
+                                sendWithOperationKafka(operation);
+                                sendMessageDebitingMoney(successDebitingFundsTopicDTO);
+                                System.out.println("вызов3");
+                            }
+
+                            @Override
+                            public void afterCompletion(int status) { //если транзакция неудачна
+                                if (status == TransactionSynchronization.STATUS_ROLLED_BACK) {
+                                    // Обработка отката транзакции, если необходимо
+                                    logger.error("Транзакция была отменена. ");
+                                }
+                            }
+                        });
+
+                return null;
+            }
+            else {
+                logger.error("Карта с номером: {} , name: {} , cvv: {} не найдена ", number, name, cvv);
+                throw new RuntimeException("Недостаточно средств на карте");
+            }
+
+        } catch (Exception e) {
+            status.setRollbackOnly();
+            System.out.println("Не удалось найти пользователя " + e.getMessage());
+            throw new RuntimeException("Не удалось найти пользователя " + e.getMessage());
+        }
+    });
+
+    }
+
+
+
+    private void sendWithOperationKafka(Operation operation) {
+        try {
+            String messageType = operation.getClass().getSimpleName();
+            System.out.println("sendWithOperationKafka");
+            ProducerRecord<String, Object> record = new ProducerRecord<>(
+                    "queue-for-transfer-operation-topic",
+                    String.valueOf(operation.getIdOperation()),
+                    operation
+            );
+            record.headers().add("messageType", messageType.getBytes());
+
+            CompletableFuture<SendResult<String, Object>> future = kafkaTemplate.send(record);
+        }catch (Exception e) {
+            throw new RuntimeException("Ошибка при отправке операции в kafka " + e.getMessage());
+        }
+
+    }
+
+    private boolean sendMessageDebitingMoney(SuccessDebitingFundsTopicDTO successDebitingFundsTopicDTO) {
+
+        try {
+            String messageType = successDebitingFundsTopicDTO.getClass().getSimpleName();
+
+            System.out.println(messageType + " TYPE");
+            ProducerRecord<String, Object> debiting = new ProducerRecord<>(
+                    "success-debiting-funds-topic",
+                    String.valueOf(successDebitingFundsTopicDTO.getIdOperation()),
+                    successDebitingFundsTopicDTO
+            );
+            debiting.headers().add("messageType", messageType.getBytes());
+
+            SendResult<String, Object> future = kafkaTemplate.send(debiting).get();
+
+            System.out.println("Topic: " + future.getRecordMetadata().topic());
+            System.out.println("Partition: " + future.getRecordMetadata().partition());
+            System.out.println("Offset: " + future.getRecordMetadata().offset());
+            System.out.println("Timestamp: " + future.getRecordMetadata().timestamp());
+            System.out.println("PaymentId " + successDebitingFundsTopicDTO.getId());
+
+            return true;
+        }catch (Exception e){
+            throw new RuntimeException(e);
+        }
     }
 
 

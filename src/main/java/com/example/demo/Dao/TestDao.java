@@ -18,8 +18,7 @@ public class TestDao {
     @PersistenceContext
     private EntityManager entityManager;
 
-    @Autowired
-    private JobLauncher jobLauncher;
+
 
     @Transactional
     public void generateCards(List<Card> cards) {

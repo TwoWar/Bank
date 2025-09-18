@@ -63,14 +63,17 @@ public class Operations implements OperationFromApi{
                                                      String cvv, String number, String name){
         try {
             System.out.println("Перед вызовом debitingMoney");
-            checkUserBank.debitingMoney(cvv, number, name, successDebitingFundsTopicDTO.getMoney());
+            Timestamp timestamp = otherMethods.generateDate();
+            checkUserBank.debitingMoney(cvv, number, name, successDebitingFundsTopicDTO.getMoney(),successDebitingFundsTopicDTO,timestamp);
 
             System.out.println("Debiting Money success");
 
 
-            sendMessageDebitingMoney(successDebitingFundsTopicDTO);
+            //sendMessageDebitingMoney(successDebitingFundsTopicDTO);
 
             System.out.println("Успех operationDebitingMoneyAndSendMessage");
+
+
 
         }catch (Exception e){
             throw new RuntimeException(e);
@@ -83,7 +86,7 @@ public class Operations implements OperationFromApi{
 
             Timestamp timestamp = otherMethods.generateDate();
 
-            checkUserBank.debitingMoney(cvv,number, name, successDebitingFundsTopicDTO.getMoney());
+            checkUserBank.debitingMoney(cvv,number, name, successDebitingFundsTopicDTO.getMoney(),successDebitingFundsTopicDTO,timestamp);
 
             operationSaveOutboxDao.saveOperationOutbox(successDebitingFundsTopicDTO,timestamp);
 
