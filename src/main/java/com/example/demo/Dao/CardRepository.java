@@ -9,12 +9,14 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
 
 @Repository
+@Transactional("jpaTransactionManager")
 public interface CardRepository extends JpaRepository<Card, Long> {
 
     @NotNull List<Card> findAll();
@@ -38,6 +40,11 @@ public interface CardRepository extends JpaRepository<Card, Long> {
     @Query("UPDATE Card s SET s.money=s.money+500 WHERE s.number=:number")
 
     boolean ReceivingMoney (@NotNull String number);
+
+    @Override
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    <S extends Card> S save(S entity);
+
 
 
 }

@@ -36,13 +36,15 @@ public class OperationWithKafka {
 
     @KafkaListener(topics = "queue-for-transfer-operation-topic" , groupId = "queue-for-transfer-operation")
     public void saveOperationWithRedis(ConsumerRecord<String,String> record) {
-
+        System.out.println("queue RECORD");
+        System.out.println(record.value());
             try {
                 String messageType = determiningMessageType(record);
-
+                System.out.println(messageType + " Type");
                 String message = record.value();
 Operation operation = new Operation();
                 if (messageType.equals("Operation")) {
+                    System.out.println("ВЫЗОВ ЕСТЬ");
                     operation =  objectMapper.readValue(message, Operation.class);
                 }
             System.out.println("saveOperationWithRedis");

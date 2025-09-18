@@ -1,4 +1,6 @@
 
+
+
 spring:
   datasource:
     driver-class-name: org.postgresql.Driver
@@ -8,6 +10,8 @@ spring:
   jpa:
     hibernate:
       ddl-auto: update
+  application:
+    name: bank_service
 
 logging:
   level:
@@ -17,4 +21,11 @@ logging:
     #  Чтобы видеть SQL запросы, добавьте:
     org.hibernate.SQL: DEBUG
     org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/ # Адрес Eureka Server
+    register-with-eureka: true
 

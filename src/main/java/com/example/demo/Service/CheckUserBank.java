@@ -6,6 +6,8 @@ import com.example.demo.Dao.CardRepository;
 import com.example.demo.models.Card;
 import com.example.demo.models.Operation;
 import com.google.common.util.concurrent.ListenableFuture;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -16,6 +18,8 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.sql.Timestamp;
@@ -23,7 +27,6 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 @Service
-
 public class CheckUserBank {
 
 
@@ -31,25 +34,31 @@ public class CheckUserBank {
 
     private final KafkaTemplate<String, Object> kafkaTemplate;
 
+    @Autowired
+    @Qualifier("jpaTransactionTemplate")
+    private TransactionTemplate jpaTransactionTemplate;
+
+    @PersistenceContext
+    private EntityManager entityManager;
 
 
-    private final TransactionTemplate kafkaTransactionTemplate;
 
     private static final Logger logger = LoggerFactory.getLogger(CheckUserBank.class);
 
+    //@Qualifier("customKafkaTransactionTemplate") TransactionTemplate kafkaTransactionTemplate
     @Autowired
-    public CheckUserBank(CardRepository cardRepository, KafkaTemplate<String, Object> kafkaTemplate, @Qualifier("customKafkaTransactionTemplate") TransactionTemplate kafkaTransactionTemplate) {
+    public CheckUserBank(CardRepository cardRepository, KafkaTemplate<String, Object> kafkaTemplate) {
         this.cardRepository = cardRepository;
         this.kafkaTemplate = kafkaTemplate;
-        this.kafkaTransactionTemplate = kafkaTransactionTemplate;
     }
 
 
     public void debitingMoney(String cvv, String number, String name, int amount, SuccessDebitingFundsTopicDTO successDebitingFundsTopicDTO, Timestamp timestamp) {
-    kafkaTransactionTemplate.execute(status -> {
+    jpaTransactionTemplate.execute(status -> {
         System.out.println("debiting money");
         System.out.println("вызов0");
         try {
+
             Optional<Card> checkCard = cardRepository.findCardByCvvAndNumberAndName(cvv, number, name);
 
             if (checkCard.isPresent()) {
@@ -57,21 +66,35 @@ public class CheckUserBank {
                 System.out.println("вызов1");
                 if (checkCard.get().getMoney() >= amount) {
                     card.setMoney(checkCard.get().getMoney() - amount);
-                    cardRepository.save(card);
+                    entityManager.merge(card);
                 }
 
                 Operation operation = new Operation(successDebitingFundsTopicDTO);
                 operation.setDate(new Timestamp(timestamp.getTime()));
 
                 System.out.println("вызов2");
-                sendWithOperationKafka(operation);
+                TransactionSynchronizationManager.registerSynchronization(
+                        new TransactionSynchronization() {
+                            @Override
+                            public void afterCommit() { //если транзакция успешна
+                                System.out.println("OPERATION " + operation);
+                                sendWithOperationKafka(operation);
+                                sendMessageDebitingMoney(successDebitingFundsTopicDTO);
+                                System.out.println("вызов3");
+                            }
 
-                sendMessageDebitingMoney(successDebitingFundsTopicDTO);
+                            @Override
+                            public void afterCompletion(int status) { //если транзакция неудачна
+                                if (status == TransactionSynchronization.STATUS_ROLLED_BACK) {
+                                    // Обработка отката транзакции, если необходимо
+                                    logger.error("Транзакция была отменена. ");
+                                }
+                            }
+                        });
 
-                System.out.println("вызов3");
-
-return null;
-            } else {
+                return null;
+            }
+            else {
                 logger.error("Карта с номером: {} , name: {} , cvv: {} не найдена ", number, name, cvv);
                 throw new RuntimeException("Недостаточно средств на карте");
             }

@@ -16,6 +16,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 import org.springframework.core.env.Environment;
+import org.springframework.data.transaction.ChainedTransactionManager;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.config.TopicBuilder;
 import org.springframework.kafka.core.*;
@@ -24,6 +25,7 @@ import org.springframework.kafka.support.serializer.JsonDeserializer;
 import org.springframework.kafka.support.serializer.JsonSerializer;
 import org.springframework.kafka.transaction.KafkaTransactionManager;
 import org.springframework.orm.jpa.JpaTransactionManager;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -34,7 +36,7 @@ import static org.apache.kafka.clients.producer.ProducerConfig.ACKS_CONFIG;
 
 @Configuration
 @EnableTransactionManagement
-@EnableAutoConfiguration(exclude = BatchAutoConfiguration.class)
+        //@EnableAutoConfiguration(exclude = BatchAutoConfiguration.class)
 public class KafkaConfig {
 
     @Autowired
@@ -112,6 +114,7 @@ public class KafkaConfig {
 
 
     @Bean(name = "customKafkaTransactionManager")
+    @Primary
     public KafkaTransactionManager<String, Object> kafkaTransactionManager(ProducerFactory<String, Object> producerFactory) {
         KafkaTransactionManager<String, Object> transactionManager = new KafkaTransactionManager<>(producerFactory);
         return transactionManager;
